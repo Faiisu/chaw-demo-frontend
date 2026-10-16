@@ -110,12 +110,18 @@ p {
   letter-spacing: -2px;
   line-height: 1;
 }
+.brand-label {
+  font-size: 17px;
+  letter-spacing: -0.4px;
+  line-height: 1.25;
+}
 .brand-mark {
   background: var(--navy);
   color: white;
   display: grid;
   place-items: center;
   width: 36px;
+  flex-shrink: 0;
   height: 37px;
   border-radius: 11px;
   margin-right: 10px;

@@ -200,7 +200,7 @@ function App() {
     const url = URL.createObjectURL(blob),
       a = document.createElement("a");
     a.href = url;
-    a.download = `chew-${mode}-reports.json`;
+    a.download = `mockup-dashboard-${mode}-reports.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -222,15 +222,15 @@ function App() {
           <span className="brand-mark">
             <AudioLines size={25} />
           </span>
-          chew<span className="brand-dot">.</span>
+          <span className="brand-label">Mockup Dashboard</span>
         </a>
         <div className="workspace">
           <div className="store-icon">
             <Store size={19} />
           </div>
           <div>
-            <strong>Restaurant 01</strong>
-            <span>Service intelligence</span>
+            <strong>Mockup Dashboard</strong>
+            <span>Shared insights</span>
           </div>
           <ChevronDown size={15} />
         </div>
@@ -241,7 +241,7 @@ function App() {
             onClick={() => setPage("overview")}
           >
             <LayoutDashboard size={19} />
-            Service overview
+            Overview
           </button>
           <button
             className={page === "reports" ? "active" : ""}
@@ -252,7 +252,7 @@ function App() {
           </button>
           <button onClick={editRules}>
             <ShieldCheck size={19} />
-            Service rules
+            Evaluation rules
             <span className="small-dot" />
           </button>
           <button onClick={() => setConnectionOpen(true)}>
@@ -286,9 +286,9 @@ function App() {
             Understanding the data
           </button>
           <div className="profile">
-            <span className="avatar">R</span>
+            <span className="avatar">M</span>
             <div>
-              <strong>Restaurant workspace</strong>
+              <strong>Mockup Dashboard</strong>
               <span>Shared dashboard</span>
             </div>
           </div>
@@ -297,13 +297,13 @@ function App() {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
-            Workspace <ChevronRight size={14} />
+            Mockup Dashboard <ChevronRight size={14} />
             <span>
               {page === "reports"
                 ? "All reports"
                 : page === "guide"
                   ? "Understanding the data"
-                  : "Service overview"}
+                  : "Overview"}
             </span>
           </div>
           <div className="topbar-right">
@@ -312,21 +312,21 @@ function App() {
               Bangkok · UTC+7
             </span>
             <span className="top-separator" />
-            <span className="avatar small">R</span>
+            <span className="avatar small">M</span>
           </div>
         </header>
         <main>
           <div className="page-heading">
             <div>
-              <div className="eyebrow">SERVICE INSIGHTS</div>
-              <h1>
+              <div className="eyebrow">MOCKUP DASHBOARD</div>
+              <h1>Mockup Dashboard</h1>
+              <p>
                 {page === "reports"
-                  ? "Every report tells a story."
+                  ? "Browse and review shared reports."
                   : page === "guide"
-                    ? "Understand your data."
-                    : "Good service starts with a conversation."}
-              </h1>
-              <p>A clearer view of your service, one conversation at a time.</p>
+                    ? "Understand reports, evidence, and shared data."
+                    : "Monitor shared reports, trends, and evaluation results."}
+              </p>
             </div>
             <button
               className="button"
@@ -537,7 +537,7 @@ function App() {
                       <div className="panel-heading">
                         <div>
                           <h2>
-                            The rhythm of your service{" "}
+                            Report activity{" "}
                             <span className="subtle-tag">By time window</span>
                           </h2>
                           <p>Rule evidence alongside peak customer presence.</p>
@@ -572,7 +572,7 @@ function App() {
                     <section className="panel rule-summary">
                       <div className="panel-heading">
                         <div>
-                          <h2>Service rules</h2>
+                          <h2>Evaluation rules</h2>
                           <p>
                             Evidence across {eligible.length} eligible reports
                           </p>
@@ -627,7 +627,7 @@ function App() {
                         )}
                       </div>
                       <button className="rule-edit" onClick={editRules}>
-                        Manage service rules
+                        Manage evaluation rules
                         <ArrowRight size={15} />
                       </button>
                     </section>
@@ -638,7 +638,7 @@ function App() {
                 <div className="panel-heading">
                   <div>
                     <h2>
-                      Service reports{" "}
+                      Reports{" "}
                       <span className="number-pill">{dated.length}</span>
                     </h2>
                     <p>
@@ -783,7 +783,7 @@ function App() {
                     <h3>
                       {reports.length
                         ? "No reports match your filters"
-                        : "Ready to hear from your restaurant"}
+                        : "Waiting for shared reports"}
                     </h3>
                     <p>
                       {reports.length
@@ -833,8 +833,8 @@ function App() {
             </>
           )}
           <footer>
-            <span className="footer-brand">chew.</span>
-            <span>Better conversations. Better service.</span>
+            <span className="footer-brand">Mockup Dashboard</span>
+            <span>Shared reports and insights.</span>
             <span>
               Vision by Nara <i /> Speech by EchoDesk
             </span>
@@ -868,7 +868,7 @@ function App() {
               Collection runs continuously and reconnects automatically. Closing this
               page does not stop collection. Broker settings are managed on the server.
             </p>
-            <p>{shared.total} reports saved in SQLite. Service rules are shared across dashboards.</p>
+            <p>{shared.total} reports saved in SQLite. Evaluation rules are shared across dashboards.</p>
             <div className="modal-actions">
               <button className="button primary" onClick={() => { changeMode("live"); setConnectionOpen(false); }}>
                 View shared reports
@@ -879,7 +879,7 @@ function App() {
       )}
       {ruleDraft && (
         <Modal
-          title="Service rules"
+          title="Evaluation rules"
           subtitle="Shared rules apply to every dashboard and saved report."
           onClose={() => setRuleDraft(null)}
           wide
@@ -1134,7 +1134,7 @@ function Trend({ reports, onSelect }) {
   if (!reports.length)
     return (
       <div className="chart-empty">
-        Your service trend will appear when reports arrive.
+        Report activity will appear when reports arrive.
       </div>
     );
   const max = Math.max(4, ...reports.map((r) => r.analysis.customers));
