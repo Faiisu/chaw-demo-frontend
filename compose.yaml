@@ -3,6 +3,14 @@ services:
     build: .
     ports:
       - "5180:5180"
+    environment:
+      MQTT_URL: ${MQTT_URL:-mqtt://mqtt:1883}
+      MQTT_TOPIC: ${MQTT_TOPIC:-restaurant/01}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      DB_PATH: /app/data/chew.sqlite
+    volumes:
+      - dashboard-data:/app/data
     restart: unless-stopped
     networks:
       - shared
@@ -11,3 +19,6 @@ networks:
   shared:
     external: true
     name: shared-network
+
+volumes:
+  dashboard-data:

@@ -1,9 +1,14 @@
+import { openStore } from "./backend/store.mjs";
+import { startCollector } from "./backend/collector.mjs";
+import { handleApi, sameOrigin } from "./backend/api.mjs";
 import http from "node:http";
 import net from "node:net";
 import tls from "node:tls";
 import { readFile } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
+const store = openStore(process.env.DB_PATH || "./data/chew.sqlite");
+const collector = startCollector(store);
 const dev = process.argv.includes("--dev");
 const port = Number(process.env.PORT ?? 5180);
 const vite = dev
@@ -21,6 +26,7 @@ const mime = {
   ".woff2": "font/woff2",
 };
 const server = http.createServer(async (req, res) => {
+  if (await handleApi(req, res, store, collector)) return;
   if (vite) return vite.middlewares(req, res);
   try {
     const pathname = decodeURIComponent(
@@ -59,13 +65,7 @@ server.on("upgrade", (req, socket, head) => {
     if (!dev) socket.destroy();
     return;
   }
-  // Accept the dashboard's host over HTTP or HTTPS (including a TLS reverse proxy).
-  if (
-    !req.headers.host ||
-    ![`http://${req.headers.host}`, `https://${req.headers.host}`].includes(
-      req.headers.origin,
-    )
-  ) {
+  if (!sameOrigin(req)) {
     socket.destroy();
     return;
   }
@@ -124,3 +124,18 @@ server.on("upgrade", (req, socket, head) => {
 server.listen(port, "0.0.0.0", () =>
   console.log(`CHEW running at http://localhost:${server.address().port}`),
 );
+
+let stopping = false;
+async function shutdown() {
+  if (stopping) return;
+  stopping = true;
+  const forceExit = setTimeout(() => process.exit(1), 5000);
+  forceExit.unref();
+  for (const ws of sockets.clients) ws.terminate();
+  await collector.close();
+  await new Promise((resolve) => server.close(resolve));
+  if (vite) await vite.close();
+  store.close();
+}
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

@@ -19,7 +19,7 @@ test("MQTT bridge permits dashboard origins and rejects other websites", { timeo
   broker.listen(0, "127.0.0.1");
   await once(broker, "listening");
   const server = spawn(process.execPath, ["server.mjs"], {
-    env: { ...process.env, PORT: "0" },
+    env: { ...process.env, PORT: "0", DB_PATH: ":memory:", MQTT_URL: "" },
     stdio: ["ignore", "pipe", "inherit"],
   });
   t.after(async () => {

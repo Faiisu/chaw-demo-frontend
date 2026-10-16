@@ -7,7 +7,6 @@ import {
   ArrowRight,
   AudioLines,
   Check,
-  CheckCheck,
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -15,8 +14,6 @@ import {
   Database,
   FileText,
   LayoutDashboard,
-  Link2,
-  LoaderCircle,
   MessageSquareText,
   Plus,
   Radio,
@@ -27,51 +24,22 @@ import {
   Store,
   Users,
   Video,
-  Wifi,
   X,
 } from "lucide-react";
 import {
   analyze,
   dateKey,
-  DEFAULT_RULES,
   demoReports,
-  parseReport,
   STATUS,
   time,
 } from "./analytics";
-import { connectBroker, validateConnection } from "./connection";
+import { useSharedReports } from "./shared.js";
 import "./styles.css";
-const DEFAULT_CONFIG = {
-  url: "mqtt://100.115.94.105:1883",
-  topic: "restaurant/01",
-  username: "",
-  password: "",
-};
 const icons = {
   greeting: MessageSquareText,
   offer: AudioLines,
   thanks: ShieldCheck,
 };
-function readRules() {
-  try {
-    const value = JSON.parse(localStorage.getItem("chew-rules-en"));
-    if (
-      Array.isArray(value) &&
-      value.length &&
-      value.every(
-        (r) =>
-          typeof r.id === "string" &&
-          typeof r.name === "string" &&
-          typeof r.keywords === "string" &&
-          Number.isInteger(r.minimum) &&
-          r.minimum > 0 &&
-          typeof r.enabled === "boolean",
-      )
-    )
-      return value;
-  } catch {}
-  return DEFAULT_RULES;
-}
 function Badge({ status }) {
   return (
     <span className={`badge ${status}`}>
@@ -113,34 +81,24 @@ function Modal({ title, subtitle, onClose, children, wide = false }) {
 }
 function App() {
   const [page, setPage] = useState("overview");
-  const [mode, setMode] = useState("demo");
-  const [live, setLive] = useState([]);
+  const [mode, setMode] = useState("live");
+  const shared = useSharedReports();
+  const live = shared.reports;
+  const rules = shared.rules;
+  const config = shared.collector;
+  const connection = shared.syncError ? "error" : config.connection;
+  const connectionMessage = shared.syncError || config.storageError || config.message;
+  const invalid = config.invalid;
   const demo = useMemo(demoReports, []);
-  const [rules, setRules] = useState(readRules);
   const [ruleDraft, setRuleDraft] = useState(null);
-  const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [connectionOpen, setConnectionOpen] = useState(false);
-  const [connection, setConnection] = useState("offline");
-  const [connectionMessage, setConnectionMessage] =
-    useState("Not connected yet");
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
   const [detail, setDetail] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [date, setDate] = useState("");
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState("");
-  const [invalid, setInvalid] = useState(0);
   const [ruleError, setRuleError] = useState("");
-  const stop = useRef(null),
-    stopTest = useRef(null);
-  useEffect(
-    () => () => {
-      stop.current?.();
-      stopTest.current?.();
-    },
-    [],
-  );
+  const [savingRules, setSavingRules] = useState(false);
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(""), 6000);
@@ -195,93 +153,8 @@ function App() {
     setStatusFilter("all");
     setSearch("");
   }
-  function disconnect() {
-    stop.current?.();
-    stop.current = null;
-    setConnection("offline");
-    setConnectionMessage("Disconnected");
-  }
-  function connect() {
-    try {
-      validateConnection(config);
-    } catch (error) {
-      setConnectionMessage(error.message);
-      return;
-    }
-    disconnect();
-    setConnection("connecting");
-    setConnectionMessage("Connecting and subscribing…");
-    setTestResult(null);
-    setLive([]);
-    setInvalid(0);
-    changeMode("live");
-    try {
-      stop.current = connectBroker(config, {
-        onSuccess: () => {
-          setConnection("connected");
-          setConnectionMessage(`Listening to ${config.topic}`);
-          setConnectionOpen(false);
-        },
-        onError: (error) => {
-          setConnection("error");
-          setConnectionMessage(error.message);
-        },
-        onMessage: (topic, message, packet) => {
-          try {
-            if (message.length > 1024 * 1024)
-              throw new Error("Message exceeds 1 MB");
-            const payload = parseReport(message);
-            setLive((previous) =>
-              [
-                ...previous,
-                {
-                  id: createId(),
-                  source: topic,
-                  receivedAt: new Date().toISOString(),
-                  retained: packet.retain,
-                  payload,
-                },
-              ].slice(-500),
-            );
-          } catch (error) {
-            setInvalid((n) => n + 1);
-            setNotice(`Skipped an invalid message: ${error.message}`);
-          }
-        },
-      });
-    } catch (error) {
-      setConnection("error");
-      setConnectionMessage(error.message);
-    }
-  }
-  function testConnection() {
-    stopTest.current?.();
-    setTesting(true);
-    setTestResult(null);
-    try {
-      stopTest.current = connectBroker(
-        config,
-        {
-          onSuccess: () => {
-            setTesting(false);
-            setTestResult({
-              ok: true,
-              text: "Connected successfully. Subscription to this topic is allowed.",
-            });
-          },
-          onError: (error) => {
-            setTesting(false);
-            setTestResult({ ok: false, text: error.message });
-          },
-        },
-        true,
-      );
-    } catch (error) {
-      setTesting(false);
-      setTestResult({ ok: false, text: error.message });
-    }
-  }
-  function saveRules() {
+  async function saveRules() {
+    if (!shared.ready) return setRuleError("Wait for the shared server before saving rules.");
     if (
       ruleDraft.some(
         (r) =>
@@ -294,16 +167,18 @@ function App() {
       return setRuleError(
         "Enter a rule name, at least one keyword, and a minimum count of 1 or more.",
       );
-    setRules(ruleDraft);
+    if (savingRules) return;
+    setSavingRules(true);
+    setRuleError("");
     try {
-      localStorage.setItem("chew-rules-en", JSON.stringify(ruleDraft));
-    } catch {
-      setNotice(
-        "Rules are active for this session, but browser storage is unavailable.",
-      );
+      await shared.saveRules(ruleDraft);
+      setRuleDraft(null);
+      setNotice("Shared rules saved. All dashboards will use these rules.");
+    } catch (error) {
+      setRuleError(error.message);
+    } finally {
+      setSavingRules(false);
     }
-    setRuleDraft(null);
-    setNotice("Rules saved. All displayed reports have been re-evaluated.");
   }
   function exportData() {
     const blob = new Blob(
@@ -400,10 +275,10 @@ function App() {
             <p>
               {connection === "connected"
                 ? config.topic
-                : "Connect to your restaurant"}
+                : "Server collects automatically"}
             </p>
             <button onClick={() => setConnectionOpen(true)}>
-              Connection settings <ArrowRight size={14} />
+              Collection status <ArrowRight size={14} />
             </button>
           </div>
           <button className="help-button" onClick={() => setPage("guide")}>
@@ -414,7 +289,7 @@ function App() {
             <span className="avatar">R</span>
             <div>
               <strong>Restaurant workspace</strong>
-              <span>Local dashboard</span>
+              <span>Shared dashboard</span>
             </div>
           </div>
         </div>
@@ -501,7 +376,7 @@ function App() {
                 onClick={() => setConnectionOpen(true)}
               >
                 <SlidersHorizontal size={15} />
-                MQTT settings
+                Collection status
               </button>
             </div>
           </div>
@@ -518,15 +393,15 @@ function App() {
                   </>
                 ) : (
                   <>
-                    <strong>{connectionMessage}</strong> The latest 500 reports
-                    are kept in memory for this connection.
+                    <strong>{connectionMessage}</strong> {live.length} of {shared.total} saved reports loaded.
+                    Updates sync across dashboards every 2 seconds.
                     {invalid > 0 && ` • ${invalid} invalid messages skipped`}
                   </>
                 )}
               </span>
             </div>
-            <button onClick={() => setConnectionOpen(true)}>
-              {mode === "demo" ? "Connect live data" : "Manage connection"}
+            <button onClick={() => mode === "demo" ? changeMode("live") : setConnectionOpen(true)}>
+              {mode === "demo" ? "View shared data" : "Collection status"}
               <ArrowRight size={14} />
             </button>
           </div>
@@ -566,10 +441,12 @@ function App() {
               </p>
               <h3>Where your data lives</h3>
               <p>
-                Reports and passwords stay in memory and disappear on reload.
-                Rules are saved in this browser. A new connection starts a new
-                report session. Demo and live data stay separate. There is no
-                database history or individual identification. Retained messages
+                The server collects MQTT reports even when no dashboard is open.
+                Reports and service rules are saved in a shared SQLite database.
+                Refreshing or restarting the container preserves saved data when
+                its data volume is retained. Each dashboard loads the latest 500
+                reports first; load older reports to include them in filters,
+                statistics, and exports. Demo data is separate. Retained messages
                 may be old, and repeated upstream messages may be counted again
                 because the payload has no report ID.
               </p>
@@ -913,14 +790,14 @@ function App() {
                         ? "Try a different date, status, or search term."
                         : connection === "connected"
                           ? "Connected. Waiting for the first paired report from the FIFO matcher."
-                          : "Connect to MQTT to start receiving vision and speech reports."}
+                          : "The server is reconnecting to MQTT. Saved reports remain available."}
                     </p>
                     {!reports.length && connection !== "connected" && (
                       <button
                         className="button primary"
                         onClick={() => setConnectionOpen(true)}
                       >
-                        Connect to MQTT
+                        Collection status
                       </button>
                     )}
                   </div>
@@ -929,6 +806,12 @@ function App() {
                   <span>
                     Showing {filtered.length} of {dated.length} reports
                   </span>
+                  {mode === "live" && shared.hasOlder && (
+                    <button className="button compact" disabled={shared.loadingOlder}
+                      onClick={() => shared.loadOlder().catch((error) => setNotice(error.message))}>
+                      {shared.loadingOlder ? "Loading…" : "Load older reports"}
+                    </button>
+                  )}
                   <span>
                     <Clock3 size={13} />
                     Report times follow the vision window
@@ -972,141 +855,32 @@ function App() {
         </div>
       )}
       {connectionOpen && (
-        <Modal
-          title="Connect to MQTT"
-          subtitle="Receive paired reports from your restaurant."
-          onClose={() => setConnectionOpen(false)}
-        >
+        <Modal title="Shared MQTT collection" subtitle="The server collects reports for every dashboard."
+          onClose={() => setConnectionOpen(false)}>
           <div className="modal-body">
             <div className="connection-status">
               <Radio size={20} />
-              <div>
-                <strong>
-                  {connection === "connected"
-                    ? "Connected"
-                    : connection === "connecting"
-                      ? "Connecting"
-                      : "Connection status"}
-                </strong>
-                <p role="status">{connectionMessage}</p>
-              </div>
+              <div><strong>Connection status</strong><p role="status">{connectionMessage}</p></div>
             </div>
-            <label className="field">
-              MQTT server
-              <select
-                disabled={
-                  testing ||
-                  connection === "connected" ||
-                  connection === "connecting"
-                }
-                value={
-                  config.url === DEFAULT_CONFIG.url ? "restaurant" : "custom"
-                }
-                onChange={(e) => {
-                  setConfig((c) => ({
-                    ...c,
-                    url:
-                      e.target.value === "restaurant" ? DEFAULT_CONFIG.url : "",
-                  }));
-                  setTestResult(null);
-                }}
-              >
-                <option value="restaurant">
-                  Restaurant 01 · 100.115.94.105
-                </option>
-                <option value="custom">Custom server</option>
-              </select>
-            </label>
-            {[
-              ["url", "Broker URL", "mqtt://100.115.94.105:1883"],
-              ["topic", "Subscription topic", "restaurant/01"],
-              [
-                "username",
-                "Username (optional)",
-                "Leave empty for anonymous access",
-              ],
-              [
-                "password",
-                "Password (optional)",
-                "Leave empty for anonymous access",
-              ],
-            ].map(([key, label, placeholder]) => (
-              <label className="field" key={key}>
-                {label}
-                <input
-                  type={key === "password" ? "password" : "text"}
-                  autoComplete="off"
-                  disabled={
-                    testing ||
-                    connection === "connected" ||
-                    connection === "connecting"
-                  }
-                  value={config[key]}
-                  placeholder={placeholder}
-                  onChange={(e) => {
-                    setConfig((c) => ({ ...c, [key]: e.target.value }));
-                    setTestResult(null);
-                  }}
-                />
-              </label>
-            ))}
+            <label className="field">Broker URL<input readOnly value={config.url} /></label>
+            <label className="field">Subscription topic<input readOnly value={config.topic} /></label>
             <p className="field-hint">
-              Supports MQTT TCP through the local bridge and direct WebSocket
-              connections. Passwords are never saved to browser storage.
+              Collection runs continuously and reconnects automatically. Closing this
+              page does not stop collection. Broker settings are managed on the server.
             </p>
-            {testResult && (
-              <div
-                role="status"
-                className={`feedback ${testResult.ok ? "success" : "error"}`}
-              >
-                {testResult.ok ? (
-                  <CheckCheck size={18} />
-                ) : (
-                  <CircleHelp size={18} />
-                )}
-                <span>{testResult.text}</span>
-              </div>
-            )}
+            <p>{shared.total} reports saved in SQLite. Service rules are shared across dashboards.</p>
             <div className="modal-actions">
-              <button
-                className="button"
-                disabled={testing || connection === "connecting"}
-                onClick={testConnection}
-              >
-                {testing ? (
-                  <LoaderCircle className="spin" size={16} />
-                ) : (
-                  <Wifi size={16} />
-                )}
-                Test connection
+              <button className="button primary" onClick={() => { changeMode("live"); setConnectionOpen(false); }}>
+                View shared reports
               </button>
-              {["connected", "connecting"].includes(connection) ? (
-                <button className="button danger" onClick={disconnect}>
-                  Disconnect
-                </button>
-              ) : (
-                <button
-                  className="button primary"
-                  disabled={testing}
-                  onClick={connect}
-                >
-                  <Link2 size={16} />
-                  Connect & subscribe
-                </button>
-              )}
             </div>
-            <p className="field-hint">
-              The test checks CONNECT and SUBSCRIBE permissions, then
-              disconnects. Starting a new connection clears the previous live
-              session.
-            </p>
           </div>
         </Modal>
       )}
       {ruleDraft && (
         <Modal
           title="Service rules"
-          subtitle="Define required phrases per customer window. Current rules apply to all reports."
+          subtitle="Shared rules apply to every dashboard and saved report."
           onClose={() => setRuleDraft(null)}
           wide
         >
@@ -1208,9 +982,9 @@ function App() {
               <button className="button" onClick={() => setRuleDraft(null)}>
                 Cancel
               </button>
-              <button className="button primary" onClick={saveRules}>
+              <button className="button primary" disabled={savingRules || !shared.ready} onClick={saveRules}>
                 <Check size={16} />
-                Save rules
+                {savingRules ? "Saving…" : "Save shared rules"}
               </button>
             </div>
           </div>
