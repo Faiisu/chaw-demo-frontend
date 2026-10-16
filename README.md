@@ -19,7 +19,7 @@ npm run build
 npm start
 ```
 
-`npm start` serves the production build and the MQTT bridge. A static-only server cannot provide TCP MQTT connections. The application binds to `0.0.0.0` so other machines can view the dashboard at `http://<server-ip>:5180`. Allow the selected port through the host firewall if needed. This applies to both `npm start` and `npm run dev`. The TCP MQTT bridge remains restricted to localhost; remote viewers can use demo mode or connect directly to a reachable WebSocket MQTT broker. Reports are per-browser sessions, so remote viewers do not automatically see another browser’s live reports.
+`npm start` serves the production build and the MQTT bridge. A static-only server cannot provide TCP MQTT connections. The application binds to `0.0.0.0` so other machines can view the dashboard at `http://<server-ip>:5180`. Allow the selected port through the host firewall if needed. This applies to both `npm start` and `npm run dev`. The TCP MQTT bridge accepts connections from the dashboard’s own host over HTTP or HTTPS. Reports are per-browser sessions, so remote viewers do not automatically see another browser’s live reports.
 
 ## Connect to your broker
 
@@ -41,7 +41,7 @@ Each rule takes the greater of exact upstream keyword counts and transcript entr
 
 Reports and credentials are in memory only. At most 500 live reports are retained; refreshing loses them. Rules persist in local browser storage. Demo data never mixes with live data. There is no background collection, database, automatic reconnect, or employee identification. Retained messages may be historical. The upstream payload has no unique report ID, so repeated deliveries cannot reliably be deduplicated.
 
-This local demo is not configured as a publicly hosted service. The bridge checks the browser origin and accepts only local hostnames. Credentials are not stored or logged by the application. TLS certificate verification remains enabled.
+This demo has no login or access control. The bridge accepts browser origins matching the dashboard host over HTTP or HTTPS; a reverse proxy must preserve the original Host header. Anyone with access to the dashboard can use the bridge to connect to broker addresses reachable by the server. Credentials are not stored or logged by the application. TLS certificate verification remains enabled.
 
 ## Docker
 
@@ -67,5 +67,4 @@ docker compose down
 ```
 
 The external network is not removed by `docker compose down`. Allow TCP port 5180 through the host firewall for remote access.
-The MQTT bridge still accepts only localhost origins; opening the dashboard through a server IP or domain does not enable TCP MQTT connections.
-For TCP MQTT used via localhost, the broker must be reachable from inside the container, including any required VPN routing. `localhost` as a broker address refers to the container itself.
+For a broker with service name `mqtt` on the same `shared-network`, enter `mqtt://mqtt:1883` in MQTT settings. The browser connects to the dashboard’s bridge, and the dashboard container resolves `mqtt` through Docker DNS. No WebSocket listener is required on Mosquitto. The broker must be reachable from inside the container, including any required VPN routing. `localhost` as a broker address refers to the container itself.

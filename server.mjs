@@ -59,12 +59,12 @@ server.on("upgrade", (req, socket, head) => {
     if (!dev) socket.destroy();
     return;
   }
-  // Keep the MQTT bridge restricted to local hostnames and same-origin browser access.
+  // Accept the dashboard's host over HTTP or HTTPS (including a TLS reverse proxy).
   if (
-    !["localhost", "127.0.0.1"].includes(
-      (req.headers.host || "").split(":")[0],
-    ) ||
-    req.headers.origin !== `http://${req.headers.host}`
+    !req.headers.host ||
+    ![`http://${req.headers.host}`, `https://${req.headers.host}`].includes(
+      req.headers.origin,
+    )
   ) {
     socket.destroy();
     return;
